@@ -142,20 +142,38 @@ class SqliteBackend(
         return conn
 
     async def close(self) -> None:
+        import gc
+
+        # Close read-pool connections first (they hold shared read locks on
+        # the WAL file).  Run WAL checkpoint on each to help release handles.
         for rconn in getattr(self, "_read_pool", []):
+            try:
+                rconn.execute("PRAGMA wal_checkpoint(TRUNCATE)")
+            except Exception:
+                pass
             try:
                 rconn.close()
             except Exception:
                 logger.debug("Failed to close read pool connection", exc_info=True)
         if hasattr(self, "_read_pool"):
             self._read_pool.clear()
+
+        # Close the write connection with a final WAL checkpoint
         if self._db:
             try:
                 self._db.execute("PRAGMA wal_checkpoint(TRUNCATE)")
             except Exception:
                 logger.debug("WAL checkpoint failed during close", exc_info=True)
-            self._db.close()
+            try:
+                self._db.close()
+            except Exception:
+                logger.debug("Failed to close write connection", exc_info=True)
             self._db = None
+
+        # Force garbage collection so C-level SQLite handles are released
+        # before pytest's tmp_path cleanup runs (critical on Windows where
+        # open handles block directory deletion).
+        gc.collect()
 
     # ---- transaction ---------------------------------------------------------
 

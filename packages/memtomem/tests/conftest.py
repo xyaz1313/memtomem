@@ -54,7 +54,7 @@ async def components(tmp_path):
 
     db_path = str(tmp_path / "test.db")
     mem_dir = str(tmp_path / "memories")
-    (tmp_path / "memories").mkdir()
+    (tmp_path / "memories").mkdir(exist_ok=True)
 
     os.environ["MEMTOMEM_STORAGE__SQLITE_PATH"] = db_path
     os.environ["MEMTOMEM_INDEXING__MEMORY_DIRS"] = json.dumps([mem_dir])
