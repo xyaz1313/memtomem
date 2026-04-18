@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio as _asyncio
 import json
 import logging
+import unicodedata
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, File, HTTPException, Request, UploadFile
@@ -61,6 +62,17 @@ def _require_localhost(request: Request) -> None:
     client = request.client
     if client and client.host not in _LOCALHOST_ADDRS:
         raise HTTPException(status_code=403, detail="This endpoint is restricted to localhost")
+
+
+def _nfc_str(p: Path) -> str:
+    """Return a resolved, NFC-normalized string for a path.
+
+    macOS ``Path.resolve()`` can return NFD (decomposed) Unicode form;
+    user-supplied paths are typically NFC.  Comparing raw ``Path`` objects
+    or their ``str()`` without NFC normalization leads to false negatives
+    (duplicate entries, 404 on removal, etc.).
+    """
+    return unicodedata.normalize("NFC", str(p.resolve()))
 
 
 router = APIRouter(tags=["system"])
@@ -263,7 +275,7 @@ async def add_memory_dir(request: Request, config=Depends(get_config)):
         resolved.mkdir(parents=True, exist_ok=True)
 
     current = [Path(p).expanduser().resolve() for p in config.indexing.memory_dirs]
-    if resolved in current:
+    if _nfc_str(resolved) in {_nfc_str(p) for p in current}:
         return {
             "ok": True,
             "message": "Already in memory_dirs",
@@ -289,7 +301,7 @@ async def remove_memory_dir(request: Request, config=Depends(get_config)):
 
     resolved = Path(dir_path).expanduser().resolve()
     new_dirs = [
-        p for p in config.indexing.memory_dirs if Path(p).expanduser().resolve() != resolved
+        p for p in config.indexing.memory_dirs if _nfc_str(Path(p).expanduser().resolve()) != _nfc_str(resolved)
     ]
     if len(new_dirs) == len(config.indexing.memory_dirs):
         raise HTTPException(status_code=404, detail="Directory not in memory_dirs")
