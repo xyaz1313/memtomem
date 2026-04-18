@@ -7,6 +7,7 @@ from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 
+from memtomem.storage.sqlite_helpers import norm_path
 from memtomem.web.deps import get_storage
 from memtomem.web.schemas.core import DeleteResponse
 from memtomem.web.schemas.sources import ChunkSizeBucket, SourceOut, SourcesResponse
@@ -63,16 +64,16 @@ async def delete_source(
     storage=Depends(get_storage),
 ) -> DeleteResponse:
     indexed_sources = await storage.get_all_source_files()
-    request_path = Path(path).resolve()
-    indexed_resolved = {p.resolve() for p in indexed_sources}
+    request_norm = norm_path(Path(path))
+    indexed_norms = {norm_path(p) for p in indexed_sources}
 
-    if request_path not in indexed_resolved:
+    if request_norm not in indexed_norms:
         raise HTTPException(
             status_code=403,
             detail="Path is not an indexed source file.",
         )
 
-    deleted = await storage.delete_by_source(request_path)
+    deleted = await storage.delete_by_source(Path(path).resolve())
     return DeleteResponse(deleted=deleted)
 
 
@@ -83,11 +84,13 @@ async def source_content(
 ):
     """Return the raw text content of an indexed source file (max 1 MB)."""
     indexed_sources = await storage.get_all_source_files()
-    request_path = Path(path).resolve()
-    indexed_resolved = {p.resolve() for p in indexed_sources}
+    request_norm = norm_path(Path(path))
+    indexed_norms = {norm_path(p) for p in indexed_sources}
 
-    if request_path not in indexed_resolved:
+    if request_norm not in indexed_norms:
         raise HTTPException(status_code=403, detail="Path is not an indexed source file.")
+
+    request_path = Path(path).resolve()
 
     if not request_path.exists():
         raise HTTPException(status_code=404, detail="Source file not found on disk.")
