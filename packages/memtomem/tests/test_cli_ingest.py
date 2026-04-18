@@ -548,7 +548,7 @@ class TestGeminiIngestIntegration:
 class TestCodexIngestIntegration:
     async def test_happy_path_indexes_codex_memories(self, components, tmp_path):
         mem_dir = tmp_path / "memories"
-        mem_dir.mkdir()
+        mem_dir.mkdir(exist_ok=True)
         (mem_dir / "fact_a.md").write_text(
             "# Workspace preference\n\nAlways use workspace-write sandbox mode.\n"
         )
@@ -578,7 +578,7 @@ class TestCodexIngestIntegration:
 
     async def test_rerun_skips_unchanged(self, components, tmp_path):
         mem_dir = tmp_path / "memories"
-        mem_dir.mkdir()
+        mem_dir.mkdir(exist_ok=True)
         (mem_dir / "fact.md").write_text("# Fact\n\nSome important fact.\n")
 
         files = _codex_discover_files(mem_dir)
